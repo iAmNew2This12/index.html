@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Audi Pure Protection | Get Your Quote</title>
+  <script src="https://www.google.com/recaptcha/api.js?render=6LcExample_RECAPTCHA_SITE_KEY"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Georgia', serif; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    // ─── CONFIGURATION ───────────────────────────────────────────────────
+    const CONFIG = {
+      RECAPTCHA_SITE_KEY: "6LcExample_RECAPTCHA_SITE_KEY", // ⚠️ REPLACE WITH YOUR ACTUAL KEY
+      GOOGLE_SCRIPT_URL: "https://script.google.com/macros/s/AKfycbznJzd7JZDCoOuHQfp0tOvHpk9Go9VUpb2q3ZSuglW2WqytlZjNZyGhWatXjpWmFVSK/exec",
+      RATE_LIMIT_MAX: 3, // Max submissions per session
+      RATE_LIMIT_WINDOW: 3600000 // 1 hour in milliseconds
+    };
+
+    // ─── Theme ───
+    const R = "#CC0000";
+    const DARK = "#0a0a0a";
+    const GRAY = "#6b6b6b";
+
+    // ─── VIN VALIDATION (with check digit algorithm) ───
+    function validateVIN(vin) {
+      if (!vin || vin.length !== 17) return false;
+      
+      // VIN cannot contain I, O, Q
+      if (/[IOQ]/.test(vin)) return false;
+      
+      // Transliteration table for check digit calculation
+      const transliteration = {
+        'A': 1, 'B': 2, 'C': 3, 'D': 4, 'E': 5, 'F': 6, 'G': 7, 'H': 8,
+        'J': 1, 'K': 2, 'L': 3, 'M': 4, 'N': 5, 'P': 7, 'R': 9,
+        'S': 2, 'T': 3, 'U': 4, 'V': 5, 'W': 6, 'X': 7, 'Y': 8, 'Z': 9
+      };
+      
+      const weights = [8, 7, 6, 5, 4, 3, 2, 10, 0, 9, 8, 7, 6, 5, 4, 3, 2];
+      let sum = 0;
+      
+      for (let i = 0; i < 17; i++) {
+        let value;
+        const char = vin[i];
+        
+        if (i === 8) continue; // Skip check digit position
+        
+        if (/\d/.test(char)) {
+          value = parseInt(char);
+        } else {
+          value = transliteration[char];
+          if (!value) return false;
+        }
+        
+        sum += value * weights[i];
+      }
+      
+      const checkDigit = sum % 11;
+      const expectedChar = checkDigit === 10 ? 'X' : checkDigit.toString();
+      
+      return vin[8] === expectedChar;
+    }
+
+    // ─── RATE LIMITING ───
+    function checkRateLimit() {
+      const storage = sessionStorage;
+      const now = Date.now();
+      const submissions = JSON.parse(storage.getItem('submissions') || '[]');
+      
+      // Clean old submissions
+      const recent = submissions.filter(time => now - time < CONFIG.RATE_LIMIT_WINDOW);
+      
+      if (recent.length >= CONFIG.RATE_LIMIT_MAX) {
+        return false;
+      }
+      
+      recent.push(now);
+      storage.setItem('submissions', JSON.stringify(recent));
+      return true;
+    }
+
+    // ─── Shared styles ───
+    const gridBg = {
+      position: "absolute", inset: 0, pointerEvents: "none", zIndex: 1,
+      backgroundImage: "linear-gradient(rgba(255,255,255,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.03) 1px,transparent 1px)",
+      backgroundSize: "60px 60px"
+    };
+    const btnPrimary = {
+      width: "100%", background: R, color: "#fff", border: "none", padding: "15px",
+      fontSize: 12, letterSpacing: 2.5, textTransform: "uppercase",
+      fontFamily: "inherit", cursor: "pointer", borderRadius: 4, transition: "opacity 0.2s"
+    };
+    const btnOut = {
+      background: "transparent", border: "1px solid rgba(255,255,255,0.22)", color: "#fff",
+      padding: "9px 20px", fontSize: 11, letterSpacing: 1.5, textTransform: "uppercase",
+      cursor: "pointer", borderRadius: 4, fontFamily: "inherit", transition: "all 0.2s"
+    };
+
+    // ─── Sub-components ───
+    const FourRings = ({ color = "#fff", size = 100 }) => (
+      <svg width={size} height={size * 0.42} viewBox="0 0 200 84" fill="none">
+        {[30, 75, 125, 170].map((cx, i) => (
+          <circle key={i} cx={cx} cy={42} r={28} stroke={color} strokeWidth="7" fill="none" />
+        ))}
+      </svg>
+    );
+
+    function Field({ label, value, error, onChange, placeholder, inputMode, type = "text" }) {
+      return (
+        <div>
+          <label style={{ display: "block", fontSize: 11, letterSpacing: 1.5, textTransform: "uppercase", color: "#888", marginBottom: 7 }}>{label}</label>
+          <input
+            type={type}
+            value={value} 
+            onChange={e => onChange(e.target.value)} 
+            placeholder={placeholder} 
+            inputMode={inputMode}
+            style={{
+              width: "100%", background: "rgba(255,255,255,0.06)",
+              border: `1px solid ${error ? R : "rgba(255,255,255,0.13)"}`,
+              borderRadius: 6, padding: "13px 14px", color: "#fff", fontSize: 14,
+              fontFamily: "inherit", outline: "none", boxSizing: "border-box"
+            }}
+            onFocus={e => e.target.style.borderColor = "rgba(255,255,255,0.4)"}
+            onBlur={e => e.target.style.borderColor = error ? R : "rgba(255,255,255,0.13)"}
+          />
+          {error && <span style={{ color: R, fontSize: 11, marginTop: 4, display: "block" }}>{error}</span>}
+        </div>
+      );
+    }
+
+    function SelectField({ label, value, onChange }) {
+      const models = ["A3","A4","A5","A6","A7","A8","Q3","Q5","Q7","Q8","TT","R8","e-tron","e-tron GT","Q4 e-tron","Q6 e-tron"];
+      return (
+        <div>
+          <label style={{ display: "block", fontSize: 11, letterSpacing: 1.5, textTransform: "uppercase", color: "#888", marginBottom: 7 }}>{label}</label>
+          <select value={value} onChange={e => onChange(e.target.value)} style={{
+            width: "100%", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.13)",
+            borderRadius: 6, padding: "13px 14px", color: value ? "#fff" : "#555", fontSize: 14,
+            fontFamily: "inherit", outline: "none", boxSizing: "border-box", appearance: "none", cursor: "pointer"
+          }}>
+            <option value="" style={{ background: "#222", color: "#555" }}>Select a model</option>
+            {models.map(m => <option key={m} value={m} style={{ background: "#222", color: "#fff" }}>{m}</option>)}
+          </select>
+        </div>
+      );
+    }
+
+    function Checkbox({ label, checked, onChange, error }) {
+      return (
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+          <input 
+            type="checkbox" 
+            checked={checked} 
+            onChange={e => onChange(e.target.checked)}
+            style={{ marginTop: 3, cursor: "pointer", accentColor: R }}
+          />
+          <label style={{ 
+            fontSize: 12, 
+            color: error ? R : "#ccc", 
+            lineHeight: 1.5, 
+            cursor: "pointer",
+            flex: 1
+          }} onClick={() => onChange(!checked)}>
+            {label}
+          </label>
+        </div>
+      );
+    }
+
+    // Privacy Policy Modal
+    function PrivacyModal({ onClose }) {
+      return (
+        <div style={{
+          position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", 
+          display: "flex", alignItems: "center", justifyContent: "center", 
+          zIndex: 1000, padding: 20, animation: "fadeIn 0.2s"
+        }} onClick={onClose}>
+          <div style={{
+            background: DARK, border: "1px solid rgba(255,255,255,0.15)",
+            borderRadius: 12, maxWidth: 600, width: "100%", maxHeight: "80vh",
+            overflow: "auto", padding: "30px 35px", position: "relative"
+          }} onClick={e => e.stopPropagation()}>
+            <button onClick={onClose} style={{
+              position: "absolute", top: 15, right: 15, background: "transparent",
+              border: "none", color: "#888", fontSize: 24, cursor: "pointer", padding: 5
+            }}>×</button>
+            
+            <h2 style={{ fontSize: 24, marginBottom: 20, color: "#fff" }}>Privacy Policy</h2>
+            
+            <div style={{ color: GRAY, fontSize: 14, lineHeight: 1.8 }}>
+              <p style={{ marginBottom: 15 }}>
+                <strong style={{ color: "#fff" }}>Last Updated:</strong> February 2026
+              </p>
+              
+              <h3 style={{ color: "#fff", fontSize: 16, marginTop: 20, marginBottom: 10 }}>Information We Collect</h3>
+              <p style={{ marginBottom: 15 }}>
+                When you request a Pure Protection quote, we collect your name, email address, phone number, 
+                vehicle identification number (VIN), current mileage, and vehicle model. This information is 
+                used solely to provide you with an accurate insurance quote.
+              </p>
+              
+              <h3 style={{ color: "#fff", fontSize: 16, marginTop: 20, marginBottom: 10 }}>How We Use Your Information</h3>
+              <p style={{ marginBottom: 15 }}>
+                We use your information to:
+              </p>
+              <ul style={{ marginLeft: 20, marginBottom: 15 }}>
+                <li>Generate personalized insurance quotes</li>
+                <li>Contact you regarding your quote request</li>
+                <li>Maintain records of customer inquiries</li>
+              </ul>
+              
+              <h3 style={{ color: "#fff", fontSize: 16, marginTop: 20, marginBottom: 10 }}>Data Security</h3>
+              <p style={{ marginBottom: 15 }}>
+                We implement industry-standard security measures to protect your personal information. 
+                All data is transmitted securely via HTTPS encryption.
+              </p>
+              
+              <h3 style={{ color: "#fff", fontSize: 16, marginTop: 20, marginBottom: 10 }}>Data Sharing</h3>
+              <p style={{ marginBottom: 15 }}>
+                We do not sell, trade, or rent your personal information to third parties. Your data 
+                is shared only with authorized Audi dealership representatives for the purpose of 
+                providing you with a quote.
+              </p>
+              
+              <h3 style={{ color: "#fff", fontSize: 16, marginTop: 20, marginBottom: 10 }}>Your Rights</h3>
+              <p style={{ marginBottom: 15 }}>
+                You have the right to request access to, correction of, or deletion of your personal 
+                information. Contact your local Audi dealership for assistance.
+              </p>
+              
+              <h3 style={{ color: "#fff", fontSize: 16, marginTop: 20, marginBottom: 10 }}>Contact</h3>
+              <p style={{ marginBottom: 15 }}>
+                For questions about this Privacy Policy, please contact your local Audi dealership.
+              </p>
+            </div>
+            
+            <button onClick={onClose} style={{
+              ...btnPrimary, marginTop: 25, width: "auto", padding: "12px 30px"
+            }}>Close</button>
+          </div>
+        </div>
+      );
+    }
+
+    // ─── MAIN APP ─────────────────────────────────────────────────────────────────
+    function App() {
+      const [view, setView] = useState("landing");
+      const [entries, setEntries] = useState([]);
+      const [form, setForm] = useState({ 
+        name: "", email: "", phone: "", vin: "", mileage: "", model: "", consent: false 
+      });
+      const [errors, setErrors] = useState({});
+      const [submitting, setSubmitting] = useState(false);
+      const [submitError, setSubmitError] = useState("");
+      const [showPrivacy, setShowPrivacy] = useState(false);
+
+      const validate = () => {
+        const e = {};
+        
+        if (!form.name.trim()) e.name = "Name is required";
+        
+        if (!form.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+          e.email = "Valid email required";
+        }
+        
+        if (!form.vin.trim()) {
+          e.vin = "VIN is required";
+        } else if (form.vin.trim().length !== 17) {
+          e.vin = "VIN must be exactly 17 characters";
+        } else if (!validateVIN(form.vin.trim())) {
+          e.vin = "Invalid VIN format or check digit";
+        }
+        
+        if (!form.mileage.trim() || isNaN(form.mileage)) {
+          e.mileage = "Enter a valid number";
+        }
+        
+        if (!form.consent) {
+          e.consent = "You must agree to the privacy policy";
+        }
+        
+        setErrors(e); 
+        return Object.keys(e).length === 0;
+      };
+
+      const submit = async () => {
+        setSubmitError("");
+        
+        if (!validate()) return;
+        
+        // Rate limiting check
+        if (!checkRateLimit()) {
+          setSubmitError("Too many submissions. Please try again later.");
+          return;
+        }
+        
+        setSubmitting(true);
+        
+        try {
+          // Get reCAPTCHA token
+          const recaptchaToken = await new Promise((resolve, reject) => {
+            grecaptcha.ready(() => {
+              grecaptcha.execute(CONFIG.RECAPTCHA_SITE_KEY, { action: 'submit' })
+                .then(resolve)
+                .catch(reject);
+            });
+          });
+          
+          const entry = { 
+            ...form, 
+            mileage: Number(form.mileage).toLocaleString(), 
+            submittedAt: new Date().toLocaleString(), 
+            status: "New Lead",
+            recaptchaToken,
+            referer: window.location.hostname
+          };
+          
+          // Send to Google Sheets with timeout
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+          
+          const response = await fetch(CONFIG.GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(entry),
+            signal: controller.signal
+          });
+          
+          clearTimeout(timeoutId);
+          
+          // Note: Google Apps Script with no-cors mode won't give us response status
+          // We'll assume success if no error is thrown
+          setEntries(p => [entry, ...p]);
+          setView("success");
+          
+        } catch (error) {
+          console.error('Submission error:', error);
+          
+          if (error.name === 'AbortError') {
+            setSubmitError("Request timed out. Please try again.");
+          } else {
+            setSubmitError("Unable to submit. Please check your connection and try again.");
+          }
+        } finally {
+          setSubmitting(false);
+        }
+      };
+
+      const reset = () => { 
+        setForm({ name: "", email: "", phone: "", vin: "", mileage: "", model: "", consent: false }); 
+        setErrors({}); 
+        setSubmitError("");
+        setView("landing"); 
+      };
+
+      const exportCSV = () => {
+        const h = ["Name","Email","Phone","Model","VIN","Mileage","Submitted","Status"];
+        const rows = entries.map(e => [e.name,e.email,e.phone,e.model,e.vin,e.mileage,e.submittedAt,e.status]);
+        const csv = [h, ...rows].map(r => r.map(c => `"${c}"`).join(",")).join("\n");
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+        a.download = `pure_protection_leads_${new Date().toISOString().slice(0,10)}.csv`;
+        a.click();
+      };
+
+      // ──── LANDING ─────────────────────────────────────────────────────────
+      if (view === "landing") return (
+        <div style={{ minHeight: "100vh", background: DARK, color: "#fff", fontFamily: "'Georgia',serif", position: "relative", overflow: "hidden" }}>
+          <div style={gridBg} />
+
+          {showPrivacy && <PrivacyModal onClose={() => setShowPrivacy(false)} />}
+
+          {/* nav */}
+          <nav style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 36px", position: "relative", zIndex: 3 }}>
+            <FourRings />
+            <div style={{ display: "flex", gap: 10 }}>
+              {entries.length > 0 && <button onClick={() => setView("dashboard")} style={{ ...btnOut, borderColor: R, color: R }}>Leads ({entries.length})</button>}
+            </div>
+          </nav>
+
+          {/* hero + form */}
+          <div style={{ position: "relative", zIndex: 2, maxWidth: 680, margin: "0 auto", padding: "44px 28px 60px", textAlign: "center" }}>
+            <div style={{ display: "inline-block", background: R, color: "#fff", fontSize: 10, letterSpacing: 3, textTransform: "uppercase", padding: "5px 16px", borderRadius: 2, marginBottom: 18 }}>
+              Audi Pure Protection
+            </div>
+            <h1 style={{ fontSize: "clamp(30px,5vw,50px)", fontWeight: 400, lineHeight: 1.15, margin: "0 0 12px", letterSpacing: -0.5 }}>
+              Protect Your<br /><span style={{ color: R }}>Investment.</span>
+            </h1>
+            <p style={{ color: GRAY, fontSize: 15, lineHeight: 1.6, maxWidth: 460, margin: "0 auto 36px" }}>
+              Get a personalized Pure Protection quote in minutes. Enter your vehicle details and we'll take care of the rest.
+            </p>
+
+            <div style={{ background: "rgba(255,255,255,0.04)", backdropFilter: "blur(10px)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12, padding: "34px 30px", textAlign: "left" }}>
+              {submitError && (
+                <div style={{ 
+                  background: "rgba(204,0,0,0.15)", 
+                  border: `1px solid ${R}`,
+                  borderRadius: 6, 
+                  padding: "12px 15px", 
+                  marginBottom: 20,
+                  color: R,
+                  fontSize: 13
+                }}>
+                  ⚠️ {submitError}
+                </div>
+              )}
+              
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
+                <Field label="Full Name" value={form.name} error={errors.name} onChange={v => setForm(f => ({ ...f, name: v }))} placeholder="Jane Smith" />
+                <Field label="Email Address" value={form.email} error={errors.email} onChange={v => setForm(f => ({ ...f, email: v }))} placeholder="jane@email.com" type="email" />
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
+                <Field label="Phone Number" value={form.phone} onChange={v => setForm(f => ({ ...f, phone: v }))} placeholder="(555) 123-4567" type="tel" />
+                <SelectField label="Vehicle Model" value={form.model} onChange={v => setForm(f => ({ ...f, model: v }))} />
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 14, marginBottom: 6 }}>
+                <Field label="17-Digit VIN" value={form.vin} error={errors.vin} onChange={v => setForm(f => ({ ...f, vin: v.toUpperCase() }))} placeholder="WAUAHD68X72113271" />
+                <Field label="Current Mileage" value={form.mileage} error={errors.mileage} onChange={v => setForm(f => ({ ...f, mileage: v.replace(/\D/g, "") }))} placeholder="45000" inputMode="numeric" />
+              </div>
+              <p style={{ color: GRAY, fontSize: 11, margin: "0 0 18px" }}>Your VIN is on your dashboard or registration documents.</p>
+              
+              <Checkbox 
+                label={
+                  <span>
+                    I agree to the{" "}
+                    <a 
+                      href="#" 
+                      onClick={(e) => { e.preventDefault(); setShowPrivacy(true); }}
+                      style={{ color: R, textDecoration: "underline" }}
+                    >
+                      Privacy Policy
+                    </a>
+                    {" "}and consent to the collection of my personal information for the purpose of receiving an insurance quote.
+                  </span>
+                }
+                checked={form.consent}
+                onChange={v => setForm(f => ({ ...f, consent: v }))}
+                error={errors.consent}
+              />
+              {errors.consent && <span style={{ color: R, fontSize: 11, marginTop: 4, display: "block" }}>{errors.consent}</span>}
+              
+              <button onClick={submit} disabled={submitting} style={{
+                ...btnPrimary,
+                marginTop: 20,
+                opacity: submitting ? 0.6 : 1,
+                cursor: submitting ? 'not-allowed' : 'pointer'
+              }}>
+                {submitting ? 'Submitting...' : 'Request My Quote →'}
+              </button>
+              
+              <div style={{ 
+                fontSize: 10, 
+                color: GRAY, 
+                marginTop: 15, 
+                textAlign: "center",
+                padding: "10px",
+                background: "rgba(255,255,255,0.02)",
+                borderRadius: 4
+              }}>
+                🔒 Protected by reCAPTCHA. Subject to Google{" "}
+                <a href="https://policies.google.com/privacy" target="_blank" style={{ color: GRAY, textDecoration: "underline" }}>Privacy Policy</a>
+                {" "}and{" "}
+                <a href="https://policies.google.com/terms" target="_blank" style={{ color: GRAY, textDecoration: "underline" }}>Terms of Service</a>.
+              </div>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "center", gap: 36, marginTop: 34, flexWrap: "wrap" }}>
+              {["No Obligation","Same-Day Response","Secure & Confidential"].map(t => (
+                <div key={t} style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                  <div style={{ width: 5, height: 5, borderRadius: "50%", background: R }} />
+                  <span style={{ color: GRAY, fontSize: 12 }}>{t}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <footer style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "18px 36px", display: "flex", justifyContent: "space-between", borderTop: "1px solid rgba(255,255,255,0.06)", zIndex: 2, flexWrap: "wrap", gap: 10 }}>
+            <span style={{ color: GRAY, fontSize: 10, letterSpacing: 1 }}>© 2026 AUDI — PURE PROTECTION</span>
+            <div style={{ display: "flex", gap: 20 }}>
+              <a href="#" onClick={(e) => { e.preventDefault(); setShowPrivacy(true); }} style={{ color: GRAY, fontSize: 10, textDecoration: "none" }}>Privacy Policy</a>
+              <span style={{ color: GRAY, fontSize: 10 }}>Questions? Call your local dealership.</span>
+            </div>
+          </footer>
+        </div>
+      );
+
+      // ──── SUCCESS ─────────────────────────────────────────────────────────
+      if (view === "success") return (
+        <div style={{ minHeight: "100vh", background: DARK, color: "#fff", fontFamily: "'Georgia',serif", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 32, position: "relative" }}>
+          <div style={gridBg} />
+          <div style={{ position: "relative", zIndex: 2, textAlign: "center", maxWidth: 500 }}>
+            <div style={{ width: 76, height: 76, borderRadius: "50%", background: "rgba(204,0,0,0.12)", border: `2px solid ${R}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 26px" }}>
+              <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke={R} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <h2 style={{ fontSize: 34, fontWeight: 400, margin: "0 0 10px" }}>You're All Set.</h2>
+            <p style={{ color: GRAY, fontSize: 15, lineHeight: 1.6, margin: "0 0 26px" }}>
+              Thank you, <strong style={{ color: "#fff" }}>{form.name}</strong>. A team member will be in touch shortly with your personalized quote.
+            </p>
+            <div style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, padding: "20px 24px", textAlign: "left", marginBottom: 28 }}>
+              {[["VIN", form.vin], ["Mileage", form.mileage], ...(form.model ? [["Model", form.model]] : []), ["Email", form.email]].map(([l, v]) => (
+                <div key={l} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                  <span style={{ color: GRAY, fontSize: 13 }}>{l}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600 }}>{v}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+              <button onClick={reset} style={{ ...btnPrimary, width: "auto", padding: "12px 28px" }}>Submit Another</button>
+              {entries.length > 0 && <button onClick={() => setView("dashboard")} style={btnOut}>View All Leads</button>}
+            </div>
+          </div>
+        </div>
+      );
+
+      // ──── DASHBOARD ───────────────────────────────────────────────────────
+      if (view === "dashboard") return (
+        <div style={{ minHeight: "100vh", background: "#111", color: "#fff", fontFamily: "'Georgia',serif" }}>
+          <nav style={{ background: DARK, borderBottom: "1px solid rgba(255,255,255,0.07)", padding: "15px 36px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+              <FourRings color={GRAY} size={56} />
+              <span style={{ fontSize: 10, letterSpacing: 2.5, textTransform: "uppercase", color: GRAY }}>Pure Protection Leads</span>
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={exportCSV} style={{ ...btnOut, borderColor: "#4caf50", color: "#4caf50" }}>↓ Export CSV</button>
+              <button onClick={reset} style={{ ...btnOut, borderColor: R, color: R }}>+ New</button>
+            </div>
+          </nav>
+
+          {/* Stats */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14, padding: "20px 36px" }}>
+            {[
+              ["Total Leads", entries.length],
+              ["New Today", entries.filter(e => new Date(e.submittedAt).toDateString() === new Date().toDateString()).length],
+              ["Avg Mileage", entries.length ? Math.round(entries.reduce((s, e) => s + Number(e.mileage.replace(/,/g, "")), 0) / entries.length).toLocaleString() : 0]
+            ].map(([l, v]) => (
+              <div key={l} style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: "18px 22px" }}>
+                <div style={{ color: GRAY, fontSize: 10, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 6 }}>{l}</div>
+                <div style={{ fontSize: 26, fontWeight: 400 }}>{v}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Table */}
+          <div style={{ padding: "0 36px 40px", overflowX: "auto" }}>
+            <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, overflow: "hidden" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <thead>
+                  <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
+                    {["Status","Name","Email","Phone","Model","VIN","Mileage","Submitted"].map(h => (
+                      <th key={h} style={{ textAlign: "left", padding: "13px 15px", color: GRAY, fontSize: 10, letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 400 }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {entries.length === 0 && (
+                    <tr><td colSpan={8} style={{ padding: "40px", textAlign: "center", color: GRAY, fontSize: 14 }}>
+                      No leads yet — share your landing page to start collecting!
+                    </td></tr>
+                  )}
+                  {entries.map((e, i) => (
+                    <tr key={i} style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                      <td style={{ padding: "13px 15px" }}><span style={{ background: "rgba(204,0,0,0.15)", color: R, fontSize: 10, letterSpacing: 1, padding: "3px 9px", borderRadius: 3, textTransform: "uppercase" }}>{e.status}</span></td>
+                      <td style={{ padding: "13px 15px", fontWeight: 600 }}>{e.name}</td>
+                      <td style={{ padding: "13px 15px", color: GRAY }}>{e.email}</td>
+                      <td style={{ padding: "13px 15px", color: GRAY }}>{e.phone || "—"}</td>
+                      <td style={{ padding: "13px 15px", color: GRAY }}>{e.model || "—"}</td>
+                      <td style={{ padding: "13px 15px", color: GRAY, fontFamily: "monospace", fontSize: 12 }}>{e.vin}</td>
+                      <td style={{ padding: "13px 15px", color: GRAY }}>{e.mileage}</td>
+                      <td style={{ padding: "13px 15px", color: GRAY, fontSize: 11 }}>{e.submittedAt}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      );
+
+      return null;
+    }
+
+    // Render
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
