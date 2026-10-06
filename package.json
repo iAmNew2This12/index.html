@@ -1,0 +1,8 @@
+{
+  "name": "vehicle-service-contract",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Audi San Jose Pure Protection quote landing page",
+  "engines": { "node": ">=18" }
+}

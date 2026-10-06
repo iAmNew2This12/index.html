@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pure Protection Quote | Audi San Jose</title>
+  <meta name="description" content="Request a personalized Pure Protection vehicle service contract quote for your Audi.">
+  <meta name="robots" content="index, follow">
+  <link rel="stylesheet" href="/styles.css">
+  <!-- reCAPTCHA v3: replace YOUR_RECAPTCHA_SITE_KEY here AND at the top of app.js (the site key is public; the secret key goes in Netlify) -->
+  <script src="https://www.google.com/recaptcha/api.js?render=YOUR_RECAPTCHA_SITE_KEY" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <span class="brand">Audi San Jose <span class="brand-sub">Finance</span></span>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="hero">
+      <h1>Protect your Audi beyond the factory warranty.</h1>
+      <p class="lede">Tell us a little about your vehicle and we'll send you a personalized Pure Protection quote. No obligation, no pressure.</p>
+    </section>
+
+    <section class="card" aria-labelledby="form-title">
+      <h2 id="form-title">Request your quote</h2>
+
+      <form id="lead-form" novalidate>
+        <div class="row">
+          <div class="field">
+            <label for="firstName">First name</label>
+            <input id="firstName" name="firstName" type="text" autocomplete="given-name" maxlength="50" required>
+          </div>
+          <div class="field">
+            <label for="lastName">Last name</label>
+            <input id="lastName" name="lastName" type="text" autocomplete="family-name" maxlength="50" required>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="field">
+            <label for="email">Email</label>
+            <input id="email" name="email" type="email" autocomplete="email" maxlength="120" required>
+          </div>
+          <div class="field">
+            <label for="phone">Phone <span class="opt">(optional)</span></label>
+            <input id="phone" name="phone" type="tel" autocomplete="tel" maxlength="20">
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="vin">VIN</label>
+          <input id="vin" name="vin" type="text" inputmode="text" autocomplete="off" autocapitalize="characters"
+                 maxlength="17" minlength="17" spellcheck="false" required aria-describedby="vin-help">
+          <small id="vin-help">17 characters. Find it on your registration, insurance card, or the driver-side windshield.</small>
+        </div>
+
+        <div class="row">
+          <div class="field">
+            <label for="model">Model</label>
+            <select id="model" name="model" required>
+              <option value="">Select your model</option>
+              <optgroup label="Sedans &amp; Sportbacks">
+                <option>A3</option><option>S3</option><option>RS 3</option>
+                <option>A4</option><option>S4</option>
+                <option>A5</option><option>S5</option><option>RS 5</option>
+                <option>A6</option><option>S6</option><option>RS 6 Avant</option>
+                <option>A7</option><option>S7</option><option>RS 7</option>
+                <option>A8</option><option>S8</option>
+              </optgroup>
+              <optgroup label="SUVs">
+                <option>Q3</option><option>Q5</option><option>SQ5</option><option>Q5 Sportback</option>
+                <option>Q7</option><option>SQ7</option><option>Q8</option><option>SQ8</option><option>RS Q8</option>
+              </optgroup>
+              <optgroup label="Electric">
+                <option>Q4 e-tron</option><option>Q4 Sportback e-tron</option>
+                <option>Q6 e-tron</option><option>Q8 e-tron</option>
+                <option>e-tron GT</option><option>RS e-tron GT</option>
+              </optgroup>
+              <optgroup label="Sports">
+                <option>TT</option><option>R8</option>
+              </optgroup>
+              <option>Other</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="mileage">Current mileage</label>
+            <input id="mileage" name="mileage" type="text" inputmode="numeric" maxlength="7" required>
+          </div>
+        </div>
+
+        <!-- Honeypot: hidden from people, bots fill it in -->
+        <div class="hp" aria-hidden="true">
+          <label for="company">Company</label>
+          <input id="company" name="company" type="text" tabindex="-1" autocomplete="off">
+        </div>
+
+        <label class="consent">
+          <input id="consent" name="consent" type="checkbox" required>
+          <span>I agree to be contacted by Audi San Jose about my quote by email or phone. I've read the <a href="/privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</span>
+        </label>
+
+        <p id="form-error" class="form-error" role="alert" hidden></p>
+
+        <button id="submit-btn" type="submit">Get my quote</button>
+
+        <p class="fine">This site is protected by reCAPTCHA and the Google
+          <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Privacy Policy</a> and
+          <a href="https://policies.google.com/terms" target="_blank" rel="noopener">Terms of Service</a> apply.</p>
+      </form>
+
+      <div id="success" class="success" hidden tabindex="-1">
+        <h2>Thank you!</h2>
+        <p>We've received your information. A member of our finance team will reach out shortly with your personalized quote.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <a href="/privacy.html">Privacy Policy</a>
+      <span>© <span id="yr"></span> Audi San Jose</span>
+    </div>
+  </footer>
+
+  <script src="/app.js" defer></script>
+</body>
+</html>
